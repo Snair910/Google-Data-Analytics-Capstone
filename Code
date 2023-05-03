@@ -1,0 +1,213 @@
+#To analyze user behaviours on how annual members and casual riders use Cyclistic bikes differently to make recommendations on how to convert casual riders into annual members
+
+library(tidyverse)
+library(skimr)
+library(janitor)
+library(lubridate)
+library(readr)
+library(hms)
+#Step1 Collect and upload the datasets.csv here
+
+jan22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202201-divvy-tripdata.csv")
+feb22_df<- read_csv("C:/Users/isree/OneDrive/Documents/202202-divvy-tripdata.csv")
+mar22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202203-divvy-tripdata.csv")
+apr22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202204-divvy-tripdata.csv")
+may22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202205-divvy-tripdata.csv")
+jun22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202206-divvy-tripdata.csv")
+jul22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202207-divvy-tripdata.csv")
+aug22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202208-divvy-tripdata.csv")
+sep22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202209-divvy-tripdata.csv")
+oct22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202210-divvy-tripdata.csv")
+nov22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202211-divvy-tripdata.csv")
+dec22_df <- read_csv("C:/Users/isree/OneDrive/Documents/202212-divvy-tripdata.csv")
+
+#put them all into one year view (binding by rows)
+Total_trips <- rbind(jan22_df, feb22_df, mar22_df, apr22_df, may22_df, jun22_df, jul22_df, aug22_df, sep22_df, oct22_df, nov22_df, dec22_df)
+
+
+#Below is from chatgpt on how to find inconsistent column names 
+unique_cols <- unique(unlist(lapply(Total_trips, colnames)))
+inconsistent_cols <- c()
+for (df in Total_trips) {
+  inconsistent_cols <- c(inconsistent_cols, setdiff(unique_cols, colnames(df)))
+}
+# print the inconsistent column names
+if (length(inconsistent_cols) > 0) {
+  print(paste0("Inconsistent column names found: ", paste(inconsistent_cols, collapse = ", ")))
+} else {
+  print("No inconsistent column names found.")
+}
+
+
+# Check if column types of other data frames match jan22_df
+if (identical(str(feb22_df), col_types) &&
+    identical(str(mar22_df), col_types) &&
+    identical(str(apr22_df), col_types) &&
+    identical(str(may22_df), col_types) &&
+    identical(str(jun22_df), col_types) &&
+    identical(str(jul22_df), col_types) &&
+    identical(str(aug22_df), col_types) &&
+    identical(str(sep22_df), col_types) &&
+    identical(str(oct22_df), col_types) &&
+    identical(str(nov22_df), col_types) &&
+    identical(str(dec22_df), col_types)) {
+  # All column types match
+  cat("All column types match the first data frame (jan22_df).")
+} else {
+  # Column types do not match
+  cat("Column types do not match the first data frame (jan22_df).")
+}
+
+#Add Columns for Date, Month, Day,Year and Day of Week
+Total_trips$date <- as.Date(Total_trips$started_at) #The default format is yyyy-mm-dd
+Total_trips$month <- format(as.Date(Total_trips$date), "%m")
+Total_trips$day <- format(as.Date(Total_trips$date), "%d")
+Total_trips$year <- format(as.Date(Total_trips$date), "%Y")
+Total_trips$day_of_week <- format(as.Date(Total_trips$date), "%A")
+Total_trips$time <- format(as.Date(Total_trips$date), "%H:%M:%S") #format time as HH:MM:SS
+Total_trips$time <- as_hms((Total_trips$started_at)) #create new column for time
+Total_trips$hour <- hour(Total_trips$time) #create new column for hour
+#Ride length
+Total_trips$ride_length <- difftime(Total_trips$ended_at,Total_trips$started_at, units = "mins")
+colnames(Total_trips)
+
+#Ride length in distance 
+library(geosphere)
+Total_trips['distance'] <- (distGeo(matrix(c(Total_trips$start_lng, Total_trips$start_lat), ncol=2),matrix(c(Total_trips$end_lng, Total_trips$end_lat), ncol=2))/1000.0)
+Total_trips["oneway_round"] <- case_when(Total_trips$distance == 0.0 ~ "round",Total_trips$distance > 0.0 ~ "one_way")
+
+
+colnames(Total_trips)
+
+str(Total_trips)
+
+#Clean Columns we dont need 0 or neg, duplicates, NA values
+Total_trips <- na.omit(Total_trips) #remove rows with NA values
+Total_trips <- distinct(Total_trips) #remove duplicate rows 
+Total_trips <- Total_trips[!(Total_trips$ride_length <=0),] #remove where ride_length is 0 or negative
+#remove columns not needed: ride_id, start_station_id, end_station_id, start_lat, start_long, end_lat, end_lng
+Total_trips <- Total_trips %>%  
+  select(-c(ride_id, start_station_id, end_station_id,start_lat,start_lng,end_lat,end_lng)) 
+
+
+colnames(Total_trips)
+
+#----------------Summaries--------------
+
+#Total # of rides
+nrow(Total_trips)
+
+#Total # of rides by member types
+table(Total_trips$member_casual)
+
+#Bike type
+table(Total_trips$rideable_type)
+
+#Bike type by Member type
+table_by_member_bike <- table(Total_trips$member_casual, Total_trips$rideable_type)
+
+# Set the dimnames of the table to label the rows and columns
+dimnames(table_by_member_bike) <- list(c("Casual", "Member"), c("Classic Bike", "Docked Bike", "Electric Bike"))
+
+# Print the table
+print(table_by_member_bike)
+
+#day of week
+Total_trips %>%
+  group_by(member_casual) %>%
+  count (day_of_week)
+#which months
+Total_trips %>%
+  group_by(member_casual) %>% 
+  count(month) %>% 
+  print(n = 24)
+
+#------------Average
+#average of ride_length
+Avg_Ride_length <- mean(Total_trips$ride_length)
+print(Avg_Ride_length)
+
+#average ride length by member type
+Total_trips %>%
+  group_by(member_casual) %>%
+  summarise_at(vars(ride_length),
+               list(time = mean))
+
+#average ride_length by bike type
+Total_trips %>% group_by(rideable_type) %>% 
+  summarise_at(vars(ride_length),
+               list(time = mean))
+
+#average ride_length by member type at each hour
+Total_trips %>% 
+group_by(hour, member_casual) %>% 
+  summarise_at(vars(ride_length),
+               list(time = mean)) %>% 
+  print(n=48) 
+
+#average ride_length at each hour
+Total_trips %>% 
+group_by(hour) %>% 
+  summarise_at(vars(ride_length),
+               list(time = mean)) %>% 
+  print(n=24) 
+
+
+
+#----------------Graphing
+#Plot1 is Number of Rides in each month by member types
+
+Total_trips %>% 
+  mutate(month = month(started_at, label = TRUE)) %>% 
+  group_by(member_casual, month) %>% 
+  summarise(number_of_rides = n(),
+            average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, month)  %>% 
+  ggplot(aes(x = month, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge")
+
+#Plot2 is Number of Rides each day by member types
+
+Total_trips %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = number_of_rides, fill = member_casual)) +
+  geom_col(position = "dodge")
+
+
+#Plot3 is Bike Trips preference per user types and rideable types
+  ggplot(
+  Total_trips%>%
+    group_by(member_casual, rideable_type) %>%
+    summarise(n = n())%>%
+    mutate(percentage = n/sum(n) *100) ,
+  aes(x=member_casual, y=n/1000, fill=member_casual)
+) + 
+  geom_col(position="dodge") +
+  geom_text(aes(label = paste0(round(percentage), "%")), position=position_dodge(0.85), vjust = 0) +
+  labs(x="Users", y="Bike Trips *1000", title="Bike preference per users and rideable type")+
+  facet_wrap(~rideable_type)
+
+#Plot4 is average duration each day by member types
+Total_trips %>% 
+  mutate(weekday = wday(started_at, label = TRUE)) %>% 
+  group_by(member_casual, weekday) %>% 
+  summarise(number_of_rides = n()
+            ,average_duration = mean(ride_length)) %>% 
+  arrange(member_casual, weekday)  %>% 
+  ggplot(aes(x = weekday, y = average_duration, fill = member_casual)) +
+  geom_col(position = "dodge")
+  
+#Plot5 is average bike ride duration per user and rideable type 
+  ggplot(Total_trips,
+    
+       aes(x = member_casual, y = ride_length/60, fill = member_casual)) + 
+  geom_col(position = "dodge") +
+  labs(x = "Users", y = "Average Bike Ride Duration (min)", title = "Average Bike Ride Duration per User and Rideable Type") +
+  facet_wrap(~rideable_type) 
+  
+  
+  
