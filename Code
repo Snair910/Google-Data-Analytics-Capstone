@@ -68,7 +68,12 @@ Total_trips$time <- format(as.Date(Total_trips$date), "%H:%M:%S") #format time a
 Total_trips$time <- as_hms((Total_trips$started_at)) #create new column for time
 Total_trips$hour <- hour(Total_trips$time) #create new column for hour
 #Ride length
-Total_trips$ride_length <- difftime(Total_trips$ended_at,Total_trips$started_at, units = "mins")
+# Convert the columns to POSIXct type
+Total_trips$started_at <- as.POSIXct(Total_trips$started_at, format = "%Y-%m-%d %H:%M:%S")
+Total_trips$ended_at <- as.POSIXct(Total_trips$ended_at, format = "%Y-%m-%d %H:%M:%S")
+
+# Calculate the difference in minutes
+Total_trips$ride_length <- as.numeric(difftime(Total_trips$ended_at, Total_trips$started_at, units = "mins"))
 colnames(Total_trips)
 
 #Ride length in distance 
